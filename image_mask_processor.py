@@ -56,10 +56,6 @@ def apply_heatmap_mask(video_path, mask_image_path, output_video_path):
 
     _, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
-    # # Apply morphological opening to the mask
-    # kernel_size = 1  # This can be adjusted
-    # kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    # mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
     # Find contours, define threshold, and remove small contours
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
