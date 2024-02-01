@@ -33,8 +33,8 @@ def prepare_parser():
     # Skip first frames
     parser.add_argument("-s", "--skip", action="store", dest="video_skip",
                         help="Skip first number of frames in order to warm up background \
-                              substraction alghoritm. Default: 200 frames",
-                        required=False, default=200)
+                              substraction alghoritm. Default: 0 frames",
+                        required=False, default=0)
 
     # Take  every x frame
     parser.add_argument("-t", "--take-every", action="store", dest="take_every",
