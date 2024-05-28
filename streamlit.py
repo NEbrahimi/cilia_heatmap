@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import shutil
 from scipy.signal import find_peaks
 import pandas as pd
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # Set page configuration and styles
 st.set_page_config(page_title="Cilia Analysis Tool", layout="wide")
@@ -48,7 +49,7 @@ def pixel_wise_fft_filtered_and_masked(video_path, fps):
     ret, frame = cap.read()
     if not ret:
         print("Failed to read video")
-        return None, None  # Return paths for mask and magnitude images
+        return None, None, None # Return paths for mask and magnitude images
     frames = []
     while ret:
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -93,15 +94,21 @@ def pixel_wise_fft_filtered_and_masked(video_path, fps):
     plt.savefig(frequency_map_path)
     plt.close()
 
-    plt.figure(figsize=(10, 8))
-    plt.imshow(dominant_magnitude, cmap='hot')
-    plt.colorbar()
-    plt.title('Dominant Frequency Magnitude (3-30 Hz)')
-    plt.xlabel('Pixel X')
-    plt.ylabel('Pixel Y')
-    magnitude_path = os.path.join(tempfile.gettempdir(), 'magnitude_map.png')
-    plt.savefig(magnitude_path)
-    plt.close()
+    # Create the magnitude map figure
+    fig, ax = plt.subplots()
+    im = ax.imshow(dominant_magnitude, cmap='hot')
+    ax.axis('off')
+
+    # Adjust the position of the color bar to match the image height
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="3%", pad=0.05)
+    colorbar = fig.colorbar(im, cax=cax)
+    colorbar.ax.tick_params(labelsize=7)  # Adjust the color bar tick size
+
+    # Save the figure without extra space
+    magnitude_path = os.path.join(r"C:\Users\z3541106\codes\datasets\images\storage", 'magnitude_map.png')
+    fig.savefig(magnitude_path, bbox_inches='tight', pad_inches=0, dpi=300)  # Save with high DPI for clarity
+    plt.close(fig)
 
     return mask_path, frequency_map_path, magnitude_path
 
@@ -293,9 +300,12 @@ if uploaded_file and exposure_time > 0 and run_step_1:
 storage_path = r"C:\Users\z3541106\codes\datasets\images\storage"
 os.makedirs(storage_path, exist_ok=True)
 
-# Step 2 processing after user triggers
+# Step 2 processing
 if 'original_video_path' in st.session_state and run_step_2:
     fps = 1 / exposure_time
+    video_height = 360  # Height of the video window (adjust based on your video's dimensions)
+
+    # Generate the maps
     mask_path, frequency_map_path, magnitude_path = pixel_wise_fft_filtered_and_masked(st.session_state['original_video_path'], fps)
 
     frames_output_dir = tempfile.mkdtemp()
@@ -304,8 +314,8 @@ if 'original_video_path' in st.session_state and run_step_2:
     apply_mask_to_video(st.session_state['original_video_path'], mask_path, masked_video_path)
     compatible_masked_video_path = convert_video_for_streamlit(masked_video_path)
 
-    original_video_permanent_path = os.path.join(storage_path, 'original_video.mp4')
-    masked_video_permanent_path = os.path.join(storage_path, 'masked_video.mp4')
+    original_video_permanent_path = os.path.join(r"C:\Users\z3541106\codes\datasets\images\storage", 'original_video.mp4')
+    masked_video_permanent_path = os.path.join(r"C:\Users\z3541106\codes\datasets\images\storage", 'masked_video.mp4')
     shutil.copy(st.session_state['original_video_path'], original_video_permanent_path)
     shutil.copy(masked_video_path, masked_video_permanent_path)
 
@@ -313,25 +323,50 @@ if 'original_video_path' in st.session_state and run_step_2:
     st.session_state['masked_video_permanent_path'] = masked_video_permanent_path
     st.session_state['compatible_masked_video_path'] = compatible_masked_video_path
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns([1, 1, 1.135])
     with col1:
+        # st.markdown("##### Original Video")
+        st.markdown("<h5 style='text-align: center;'>Original Video</h5>", unsafe_allow_html=True)
         st.video(st.session_state['compatible_video_path'], format='video/mp4', start_time=0, loop=True)
         with open(st.session_state['original_video_path'], "rb") as file:
             st.download_button("Download Original Video", file.read(), file_name='Original_Video.mp4', key="download_orig_video")
-        st.image(mask_path, caption="Mask Image")
-        with open(mask_path, "rb") as file:
-            st.download_button("Download Mask Image", file.read(), file_name='Mask.png', key="download_mask_image")
-
     with col2:
+        # st.markdown("##### Masked Video")
+        st.markdown("<h5 style='text-align: center;'>Masked Video</h5>", unsafe_allow_html=True)
         st.video(st.session_state['compatible_masked_video_path'], format='video/mp4', start_time=0, loop=True)
         with open(masked_video_path, "rb") as file:
             st.download_button("Download Masked Video", file.read(), file_name='Masked_Video.mp4', key="download_masked_video")
-        st.image(frequency_map_path, caption="Frequency Map")
-        with open(frequency_map_path, "rb") as file:
-            st.download_button("Download Frequency Map", file.read(), file_name='Frequency_Map.png', key="download_frequency_map")
-        st.image(magnitude_path, caption="Magnitude Map")
-        with open(magnitude_path, "rb") as file:
+    with col3:
+        # st.markdown("##### Magnitude Map")
+        st.markdown("<h5 style='text-align: center;'>Magnitude Map</h5>", unsafe_allow_html=True)
+        magnitude_image = plt.imread(magnitude_path)
+
+        # Ensure the image values are within the 0-1 range for floating-point values
+        if magnitude_image.dtype == np.float32 or magnitude_image.dtype == np.float64:
+            magnitude_image = np.clip(magnitude_image, 0, 1)
+        else:
+            magnitude_image = magnitude_image.astype(np.float32) / 255.0
+
+        # Resize the magnitude image to match the height of the video
+        aspect_ratio = magnitude_image.shape[1] / magnitude_image.shape[0]
+        new_width = int(video_height * aspect_ratio)
+
+        fig, ax = plt.subplots(figsize=(new_width / 100, video_height / 100), dpi=100)
+        im = ax.imshow(magnitude_image)
+        ax.axis('off')
+
+        # Save resized image without additional color bar
+        resized_magnitude_path = os.path.join(r"C:\Users\z3541106\codes\datasets\images\storage", 'resized_magnitude_map.png')
+        # fig.savefig(resized_magnitude_path, bbox_inches='tight', pad_inches=0, dpi=300)
+        plt.close(fig)
+
+        # Load the resized image back to add padding
+        resized_image = plt.imread(resized_magnitude_path)
+
+        st.image(resized_magnitude_path, use_column_width=True)
+        with open(resized_magnitude_path, "rb") as file:
             st.download_button("Download Magnitude Map", file.read(), file_name='Magnitude_Map.png', key="download_magnitude_map")
+
 
 # Step 3 processing
 if 'original_video_permanent_path' in st.session_state and run_step_3:
